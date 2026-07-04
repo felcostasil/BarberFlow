@@ -1,0 +1,40 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Config: Read-only for everyone (to check coordinates & shop name).
+    // Writeable only by authenticated barbers.
+    match /config/{document} {
+      allow read: if true;
+      allow write: if request.auth != null && exists(/databases/$(database)/documents/barbers/$(request.auth.uid));
+    }
+
+    // Barbers: Read-only for everyone (to display live queues and availability).
+    // Writeable by authenticated barbers (specifically themselves or other barbers).
+    match /barbers/{barberId} {
+      allow read: if true;
+      allow write: if request.auth != null && (request.auth.uid == barberId || exists(/databases/$(database)/documents/barbers/$(request.auth.uid)));
+    }
+
+    // Queue: Read-only for anyone authenticated (including anonymous users, so they can trace their position).
+    // Create allowed for anyone authenticated if the document's id matches their Auth UID.
+    // Update of the 'status' field from 'waiting' to 'serving' or 'done' allowed only by authenticated barbers.
+    // Clients can also update their own queue ticket to 'cancelled'.
+    match /queue/{queueId} {
+      allow read: if request.auth != null;
+      
+      allow create: if request.auth != null 
+        && request.resource.data.id == request.auth.uid;
+        
+      allow update: if request.auth != null && (
+        // Case 1: The user is an authenticated barber (can change status to serving/done)
+        exists(/databases/$(database)/documents/barbers/$(request.auth.uid))
+        ||
+        // Case 2: The user is the client who created the document (can change status to cancelled)
+        (request.auth.uid == resource.data.id && request.resource.data.status == 'cancelled')
+      );
+      
+      allow delete: if false;
+    }
+  }
+}
