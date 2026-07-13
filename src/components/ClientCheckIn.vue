@@ -113,7 +113,8 @@ import {
   signInAnonymously, 
   collection, 
   onSnapshot, 
-  addDoc, 
+  setDoc,
+  doc,
   query, 
   where
 } from '../services/firebase';
@@ -230,16 +231,16 @@ const handleSubmit = async () => {
     // Authenticate client anonymously
     const { user } = await signInAnonymously(auth);
     
-    // Create new queue ticket
+    // Create queue ticket using user.uid as the document ID
+    // so the clientId in the URL matches the Firestore document path
     const ticketData = {
-      id: user.uid,
       customer_name: customerName.value.trim(),
       preferred_barbers: isFirstAvailable.value ? [] : [...selectedBarberIds.value],
       status: 'waiting',
       created_at: Date.now()
     };
 
-    await addDoc(collection(db, 'queue'), ticketData);
+    await setDoc(doc(db, 'queue', user.uid), ticketData);
     
     // Redirect to waiting room
     router.push({ name: 'ClientWait', params: { clientId: user.uid } });
@@ -397,4 +398,32 @@ const handleSubmit = async () => {
   padding: 14px 28px;
   font-size: 1rem;
 }
+
+@media (max-width: 480px) {
+  .barber-card {
+    padding: 14px 12px;
+  }
+
+  .barber-name {
+    font-size: 0.88rem;
+  }
+
+  .wait-badge {
+    font-size: 0.72rem;
+  }
+
+  .queue-length {
+    font-size: 0.72rem;
+  }
+
+  .barber-stats {
+    gap: 3px;
+  }
+
+  .btn-lg {
+    padding: 13px 20px;
+    font-size: 0.95rem;
+  }
+}
+
 </style>

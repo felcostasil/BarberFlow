@@ -1,0 +1,20 @@
+// Shared domain types for BarberFlow
+
+export interface Barber {
+  id: string;
+  name: string;
+  email: string;
+  status: 'active' | 'away';
+}
+
+export interface Ticket {
+  id: string;
+  customer_name: string;
+  preferred_barbers: string[];
+  status: 'waiting' | 'serving' | 'done' | 'cancelled';
+  created_at: number;
+  assigned_barber?: string;
+}
+
+// Alias kept for components that used QueueItem name
+export type QueueItem = Ticket;

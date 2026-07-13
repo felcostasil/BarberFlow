@@ -256,9 +256,15 @@ const setMockUser = (user: MockUser | null) => {
 // EXPORTED FIREBASE API
 // ---------------------------------------------------------
 
-export const auth = !isMockMode ? realAuth! : ({
-  currentUser: mockAuthState.currentUser
-} as any);
+// In mock mode, use a Proxy so auth.currentUser always reflects the reactive
+// mockAuthState — this fixes the stale-state bugs (#3 and #4) where reading
+// auth.currentUser directly returned the value at object-creation time.
+export const auth = !isMockMode ? realAuth! : new Proxy({} as any, {
+  get(_target, prop) {
+    if (prop === 'currentUser') return mockAuthState.currentUser;
+    return undefined;
+  }
+});
 
 export const db = !isMockMode ? realDb! : ({} as any);
 
@@ -414,6 +420,38 @@ export const updateDoc = async (docRef: any, data: any): Promise<void> => {
   } else if (collectionName === 'queue') {
     const idx = mockDbState.queue.findIndex((q) => q.id === docId);
     if (idx !== -1) mockDbState.queue[idx] = { ...mockDbState.queue[idx], ...data };
+  }
+
+  syncToStorage();
+};
+
+export const setDoc = async (docRef: any, data: any): Promise<void> => {
+  if (!isMockMode) {
+    // In real Firebase mode, use setDoc from Firestore
+    const { setDoc: fbSetDoc } = await import('firebase/firestore');
+    return fbSetDoc(docRef, data);
+  }
+
+  const { path } = docRef;
+  const [collectionName, docId] = path.split('/');
+  const docData = { ...data, id: docId };
+
+  if (collectionName === 'queue') {
+    const existingIdx = mockDbState.queue.findIndex((q) => q.id === docId);
+    if (existingIdx !== -1) {
+      mockDbState.queue[existingIdx] = docData;
+    } else {
+      mockDbState.queue.push(docData);
+    }
+  } else if (collectionName === 'barbers') {
+    const existingIdx = mockDbState.barbers.findIndex((b) => b.id === docId);
+    if (existingIdx !== -1) {
+      mockDbState.barbers[existingIdx] = docData;
+    } else {
+      mockDbState.barbers.push(docData);
+    }
+  } else if (collectionName === 'config') {
+    mockDbState.config = { ...mockDbState.config, ...data };
   }
 
   syncToStorage();

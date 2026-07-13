@@ -122,6 +122,16 @@ onUnmounted(() => {
   }
 }
 
+@media (max-width: 480px) {
+  .shop-welcome h1 {
+    font-size: 1.7rem;
+  }
+
+  .onboarding-panels {
+    gap: 20px;
+  }
+}
+
 .color-gold {
   color: var(--accent-gold);
 }
@@ -134,4 +144,5 @@ onUnmounted(() => {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
 </style>

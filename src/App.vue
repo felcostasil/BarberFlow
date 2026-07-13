@@ -65,7 +65,7 @@
 import { ref, onMounted, onUnmounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { setI18nLanguage, i18n } from './i18n';
+import { setI18nLanguage, loadLocaleMessages, getInitialLocale, i18n } from './i18n';
 import { 
   isDemoMode, 
   demoLocationState, 
@@ -82,7 +82,7 @@ const isDemo = ref(isDemoMode);
 const simulatedInside = ref(demoLocationState.isSimulatingInside);
 const isLoggedIn = ref(false);
 const loggedInBarberName = ref('');
-const currentLanguage = ref(locale.value);
+const currentLanguage = ref(getInitialLocale());
 
 let unsubscribeAuth: () => void = () => {};
 
@@ -102,7 +102,9 @@ onUnmounted(() => {
   unsubscribeAuth();
 });
 
-const changeLang = () => {
+const changeLang = async () => {
+  // Bug 1 fix: always load messages before activating a new locale
+  await loadLocaleMessages(i18n, currentLanguage.value);
   setI18nLanguage(i18n, currentLanguage.value);
 };
 
@@ -151,13 +153,15 @@ const goToHome = () => {
   text-transform: uppercase;
   font-size: 0.72rem;
   letter-spacing: 0.05em;
+  white-space: nowrap;
 }
 
 .banner-controls {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   flex-wrap: wrap;
+  justify-content: center;
 }
 
 .banner-controls label {
@@ -166,6 +170,8 @@ const goToHome = () => {
   gap: 6px;
   font-size: 0.8rem;
   color: #fed7aa;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 .btn-quick-admin {
@@ -178,6 +184,7 @@ const goToHome = () => {
   cursor: pointer;
   font-size: 0.78rem !important;
   transition: all 0.2s;
+  white-space: nowrap;
 }
 
 .btn-quick-admin:hover {
@@ -203,7 +210,8 @@ const goToHome = () => {
 .app-nav {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
 .nav-link {
@@ -212,6 +220,7 @@ const goToHome = () => {
   font-weight: 600;
   font-size: 0.9rem;
   transition: color 0.2s;
+  white-space: nowrap;
 }
 
 .nav-link:hover {
@@ -251,4 +260,16 @@ const goToHome = () => {
   background-color: var(--bg-dark);
   color: var(--text-primary);
 }
+
+/* Mobile header layout */
+@media (max-width: 480px) {
+  .app-nav {
+    gap: 10px;
+  }
+
+  .nav-link {
+    font-size: 0.82rem;
+  }
+}
+
 </style>
