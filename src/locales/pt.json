@@ -133,7 +133,10 @@
     "cancelFailed": "Falha ao cancelar a ficha.",
     "cancelMarkAbsent": "Cancelar / Marcar Ausente",
     "servingBy": "Em atendimento por {barber}",
-    "barberFallback": "Barbeiro"
+    "barberFallback": "Barbeiro",
+    "averageServiceTimeLabel": "Tempo Médio",
+    "averageServiceTimeUpdated": "Tempo médio de atendimento atualizado com sucesso.",
+    "invalidTimeError": "Por favor, insira um tempo válido entre 5 e 120 minutos."
   },
   "settings": {
     "shopConfig": "Configurações do Estabelecimento",

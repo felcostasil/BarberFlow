@@ -21,6 +21,25 @@
           {{ currentBarber.status === 'active' ? t('admin.goBreak') : t('admin.goActive') }}
         </button>
       </div>
+      <div class="avg-time-setting">
+        <label for="avgTimeInput" class="time-label">
+          <Clock :size="16" class="color-gold" />
+          {{ t('admin.averageServiceTimeLabel') }}:
+        </label>
+        <div class="time-input-wrapper">
+          <input 
+            id="avgTimeInput"
+            type="number" 
+            v-model.number="averageServiceTime"
+            min="5" 
+            max="120"
+            class="time-input"
+            @change="updateAverageServiceTime"
+            :disabled="updatingTime"
+          />
+          <span class="time-unit">{{ t('common.minutes') }}</span>
+        </div>
+      </div>
     </div>
 
     <div v-if="currentBarber && currentBarber.status === 'away'" class="away-alert glass-panel">
@@ -180,11 +199,17 @@
       </div>
 
     </div>
+
+    <!-- Loading state while auth resolves (fixes bug #4 blank screen on mobile) -->
+    <div v-else-if="!isAuthReady" class="auth-loading glass-panel">
+      <RefreshCw class="spin color-gold" :size="32" />
+      <p>{{ t('common.loading') }}</p>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { ref, onUnmounted, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { 
   User, 
@@ -192,49 +217,59 @@ import {
   Scissors, 
   CheckCircle, 
   RefreshCw, 
-  Users 
+  Users,
+  Clock
 } from '@lucide/vue';
 import { 
   db, 
-  auth, 
   collection, 
   onSnapshot, 
   doc, 
   updateDoc
 } from '../services/firebase';
-
-interface Barber {
-  id: string;
-  name: string;
-  email: string;
-  status: 'active' | 'away';
-}
-
-interface Ticket {
-  id: string;
-  customer_name: string;
-  preferred_barbers: string[];
-  status: 'waiting' | 'serving' | 'done' | 'cancelled';
-  created_at: number;
-  assigned_barber?: string;
-}
+import { useBarberAuth } from '../composables/useBarberAuth';
+import { useTimeUtils } from '../utils/timeUtils';
+import type { Barber, Ticket } from '../types/index';
 
 const { t } = useI18n();
+const { formatTimeAgo, formatTime } = useTimeUtils();
+
+// Reactive auth composable — resolves bugs #3 and #4
+// currentUser updates immediately when auth state changes (no stale reads)
+const { currentUser, isAuthReady } = useBarberAuth();
 
 const currentBarber = ref<Barber | null>(null);
-const fullBarbersList = ref<Barber[]>([]);
-const globalQueue = ref<Ticket[]>([]);
+const globalQueue = ref<Ticket[]>([]); 
 
 const updatingStatus = ref(false);
 const calling = ref(false);
 const completing = ref(false);
 
+const averageServiceTime = ref(20);
+const updatingTime = ref(false);
+
+watch(currentBarber, (newBarber) => {
+  if (newBarber) {
+    averageServiceTime.value = newBarber.average_service_time || 20;
+  }
+}, { immediate: true });
+
 let unsubscribeBarbers: () => void = () => {};
 let unsubscribeQueue: () => void = () => {};
 
-onMounted(() => {
-  const currentUid = auth.currentUser?.uid;
-  if (!currentUid) return;
+// Set up Firestore listeners whenever the authenticated user changes.
+// This replaces the onMounted pattern that caused bugs #3 and #4.
+watch(currentUser, (user) => {
+  // Tear down existing listeners first to prevent leaks on user switch
+  unsubscribeBarbers();
+  unsubscribeQueue();
+
+  const currentUid = user?.uid;
+  if (!currentUid || user?.isAnonymous) {
+    currentBarber.value = null;
+    globalQueue.value = [];
+    return;
+  }
 
   // Listen to barbers list
   unsubscribeBarbers = onSnapshot(collection(db, 'barbers'), (snapshot: any) => {
@@ -242,16 +277,13 @@ onMounted(() => {
     snapshot.docs.forEach((docSnap: any) => {
       list.push({ id: docSnap.id, ...docSnap.data() });
     });
-    fullBarbersList.value = list;
-    
-    // Set current barber details
+
+    // Update current barber reactively
     const found = list.find(b => b.id === currentUid);
-    if (found) {
-      currentBarber.value = found;
-    }
+    currentBarber.value = found || null;
   });
 
-  // Listen to all queue tickets (waiting, serving, done, cancelled)
+  // Listen to all queue tickets
   unsubscribeQueue = onSnapshot(collection(db, 'queue'), (snapshot: any) => {
     const list: Ticket[] = [];
     snapshot.docs.forEach((docSnap: any) => {
@@ -259,7 +291,7 @@ onMounted(() => {
     });
     globalQueue.value = list;
   });
-});
+}, { immediate: true });
 
 onUnmounted(() => {
   unsubscribeBarbers();
@@ -276,7 +308,7 @@ const matchedQueue = computed(() => {
       t.status === 'waiting' && 
       (t.preferred_barbers.includes(barberId) || t.preferred_barbers.length === 0)
     )
-    .sort((a, b) => a.created_at - b.created_at); // chronologically sorted (oldest first)
+    .sort((a, b) => a.created_at - b.created_at);
 });
 
 // Check if currently serving a client
@@ -303,6 +335,31 @@ const toggleAvailability = async () => {
     alert(t('admin.statusToggleFailed'));
   } finally {
     updatingStatus.value = false;
+  }
+};
+
+const updateAverageServiceTime = async () => {
+  if (!currentBarber.value || updatingTime.value) return;
+
+  if (typeof averageServiceTime.value !== 'number' || isNaN(averageServiceTime.value)) {
+    averageServiceTime.value = 20;
+  }
+  
+  if (averageServiceTime.value < 5 || averageServiceTime.value > 120) {
+    alert(t('admin.invalidTimeError'));
+    averageServiceTime.value = currentBarber.value.average_service_time || 20;
+    return;
+  }
+
+  updatingTime.value = true;
+  try {
+    const barberRef = doc(db, 'barbers', currentBarber.value.id);
+    await updateDoc(barberRef, { average_service_time: averageServiceTime.value });
+  } catch (err) {
+    console.error('Error updating average service time:', err);
+    alert(t('admin.statusToggleFailed'));
+  } finally {
+    updatingTime.value = false;
   }
 };
 
@@ -359,20 +416,6 @@ const cancelClient = async (ticket: Ticket) => {
     alert(t('admin.cancelFailed'));
   }
 };
-
-// Date utilities
-const formatTimeAgo = (timestamp: number): string => {
-  const diffMs = Date.now() - timestamp;
-  const diffMins = Math.max(0, Math.floor(diffMs / 60000));
-  if (diffMins === 0) return t('common.justNow');
-  if (diffMins === 1) return t('common.minAgo');
-  return t('common.minsAgo', { count: diffMins });
-};
-
-const formatTime = (timestamp: number): string => {
-  const date = new Date(timestamp);
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-};
 </script>
 
 <style scoped>
@@ -382,11 +425,73 @@ const formatTime = (timestamp: number): string => {
   gap: 24px;
 }
 
+/* Auth loading placeholder */
+.auth-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 60px 40px;
+  text-align: center;
+}
+
 .barber-profile-card {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 20px 30px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.avg-time-setting {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--panel-border);
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+}
+
+.time-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.time-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.time-input {
+  width: 65px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--panel-border);
+  color: var(--text-primary);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  outline: none;
+  text-align: center;
+  transition: border-color 0.2s;
+}
+
+.time-input:focus {
+  border-color: var(--accent-gold);
+}
+
+.time-unit {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 500;
 }
 
 .barber-details {
@@ -408,7 +513,8 @@ const formatTime = (timestamp: number): string => {
 .status-toggle-wrap {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .status-toggle-wrap .badge {
@@ -527,8 +633,9 @@ const formatTime = (timestamp: number): string => {
   display: flex;
   align-items: center;
   padding: 16px;
-  gap: 16px;
+  gap: 12px;
   background: rgba(255, 255, 255, 0.02);
+  flex-wrap: wrap;
 }
 
 .ticket-index {
@@ -536,6 +643,7 @@ const formatTime = (timestamp: number): string => {
   font-size: 1.2rem;
   font-weight: 800;
   color: var(--accent-gold);
+  min-width: 32px;
 }
 
 .ticket-main {
@@ -543,6 +651,7 @@ const formatTime = (timestamp: number): string => {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 100px;
 }
 
 .client-name {
@@ -616,6 +725,7 @@ const formatTime = (timestamp: number): string => {
   align-items: center;
   padding: 12px 20px;
   border-bottom: 1px solid var(--panel-border);
+  gap: 8px;
 }
 
 .global-ticket-item:last-child {
@@ -626,11 +736,16 @@ const formatTime = (timestamp: number): string => {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  flex: 1;
+  min-width: 0;
 }
 
 .gt-name {
   font-size: 0.9rem;
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .gt-time {
@@ -640,5 +755,56 @@ const formatTime = (timestamp: number): string => {
 
 .global-ticket-right .badge {
   font-size: 0.65rem;
+  white-space: nowrap;
+}
+
+/* Responsive mobile adjustments */
+@media (max-width: 640px) {
+  .barber-profile-card {
+    padding: 16px 20px;
+  }
+
+  .barber-text h3 {
+    font-size: 1rem;
+  }
+
+  .ticket-row {
+    padding: 12px;
+  }
+
+  .ticket-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .global-ticket-item {
+    padding: 10px 16px;
+  }
+}
+
+/* Shared color helpers */
+.color-gold { color: var(--accent-gold); }
+.color-rose { color: var(--accent-rose); }
+.color-muted { color: var(--text-muted); }
+.text-center { text-align: center; }
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Sparkle glow for serving card */
+.sparkle-glow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle at 50% -20%, var(--accent-emerald-glow) 0%, transparent 60%);
+  pointer-events: none;
 }
 </style>

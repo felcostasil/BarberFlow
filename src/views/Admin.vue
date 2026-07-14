@@ -84,19 +84,9 @@ const handleLogout = async () => {
 .admin-dashboard-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 20px;
-}
-
-@media (max-width: 768px) {
-  .admin-dashboard-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  .header-actions {
-    width: 100%;
-    justify-content: space-between;
-  }
+  flex-wrap: wrap;
 }
 
 .dashboard-title-section h1 {
@@ -114,7 +104,8 @@ const handleLogout = async () => {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .tabs-navigation {
@@ -122,7 +113,40 @@ const handleLogout = async () => {
   padding: 4px;
   border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.03);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
+
+@media (max-width: 768px) {
+  .admin-dashboard-header {
+    gap: 16px;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .dashboard-title-section h1 {
+    font-size: 1.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-title-section h1 {
+    font-size: 1.3rem;
+  }
+
+  .header-actions {
+    gap: 8px;
+  }
+
+  .logout-btn {
+    padding: 6px 12px !important;
+    font-size: 0.8rem !important;
+  }
+}
+
 
 .tab-btn {
   display: flex;

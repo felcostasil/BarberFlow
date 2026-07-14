@@ -67,6 +67,7 @@ interface MockBarber {
   name: string;
   email: string;
   status: 'active' | 'away';
+  average_service_time?: number;
 }
 
 interface MockQueueItem {
@@ -102,9 +103,9 @@ const saveStorage = <T>(key: string, value: T) => {
 
 // Seed default mock data
 const defaultBarbers: MockBarber[] = [
-  { id: 'barber_1', name: 'Marcos Silva', email: 'marcos@barber.com', status: 'active' },
-  { id: 'barber_2', name: 'Thiago Costa', email: 'thiago@barber.com', status: 'active' },
-  { id: 'barber_3', name: 'Felipe Santos', email: 'felipe@barber.com', status: 'away' }
+  { id: 'barber_1', name: 'Marcos Silva', email: 'marcos@barber.com', status: 'active', average_service_time: 20 },
+  { id: 'barber_2', name: 'Thiago Costa', email: 'thiago@barber.com', status: 'active', average_service_time: 25 },
+  { id: 'barber_3', name: 'Felipe Santos', email: 'felipe@barber.com', status: 'away', average_service_time: 20 }
 ];
 
 const defaultQueue: MockQueueItem[] = [
@@ -151,6 +152,22 @@ const syncToStorage = () => {
   saveStorage('config', mockDbState.config);
   triggerSubscribers();
 };
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key && e.key.startsWith(STORAGE_PREFIX)) {
+      const keyWithoutPrefix = e.key.substring(STORAGE_PREFIX.length);
+      if (keyWithoutPrefix === 'barbers') {
+        mockDbState.barbers = loadStorage('barbers', defaultBarbers);
+      } else if (keyWithoutPrefix === 'queue') {
+        mockDbState.queue = loadStorage('queue', defaultQueue);
+      } else if (keyWithoutPrefix === 'config') {
+        mockDbState.config = loadStorage('config', defaultConfig);
+      }
+      triggerSubscribers();
+    }
+  });
+}
 
 // Subscriber system for reactive onSnapshot calls
 type SubscriberCallback = (snapshot: any) => void;
@@ -256,9 +273,15 @@ const setMockUser = (user: MockUser | null) => {
 // EXPORTED FIREBASE API
 // ---------------------------------------------------------
 
-export const auth = !isMockMode ? realAuth! : ({
-  currentUser: mockAuthState.currentUser
-} as any);
+// In mock mode, use a Proxy so auth.currentUser always reflects the reactive
+// mockAuthState — this fixes the stale-state bugs (#3 and #4) where reading
+// auth.currentUser directly returned the value at object-creation time.
+export const auth = !isMockMode ? realAuth! : new Proxy({} as any, {
+  get(_target, prop) {
+    if (prop === 'currentUser') return mockAuthState.currentUser;
+    return undefined;
+  }
+});
 
 export const db = !isMockMode ? realDb! : ({} as any);
 
@@ -414,6 +437,38 @@ export const updateDoc = async (docRef: any, data: any): Promise<void> => {
   } else if (collectionName === 'queue') {
     const idx = mockDbState.queue.findIndex((q) => q.id === docId);
     if (idx !== -1) mockDbState.queue[idx] = { ...mockDbState.queue[idx], ...data };
+  }
+
+  syncToStorage();
+};
+
+export const setDoc = async (docRef: any, data: any): Promise<void> => {
+  if (!isMockMode) {
+    // In real Firebase mode, use setDoc from Firestore
+    const { setDoc: fbSetDoc } = await import('firebase/firestore');
+    return fbSetDoc(docRef, data);
+  }
+
+  const { path } = docRef;
+  const [collectionName, docId] = path.split('/');
+  const docData = { ...data, id: docId };
+
+  if (collectionName === 'queue') {
+    const existingIdx = mockDbState.queue.findIndex((q) => q.id === docId);
+    if (existingIdx !== -1) {
+      mockDbState.queue[existingIdx] = docData;
+    } else {
+      mockDbState.queue.push(docData);
+    }
+  } else if (collectionName === 'barbers') {
+    const existingIdx = mockDbState.barbers.findIndex((b) => b.id === docId);
+    if (existingIdx !== -1) {
+      mockDbState.barbers[existingIdx] = docData;
+    } else {
+      mockDbState.barbers.push(docData);
+    }
+  } else if (collectionName === 'config') {
+    mockDbState.config = { ...mockDbState.config, ...data };
   }
 
   syncToStorage();

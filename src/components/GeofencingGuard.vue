@@ -286,6 +286,7 @@ onMounted(() => {
 .simulator-toggle {
   display: flex;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 .simulator-toggle .btn {

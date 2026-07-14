@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
+import { nextTick } from 'vue';
 import { auth, onAuthStateChanged } from '../services/firebase';
 import { i18n, loadLocaleMessages, setI18nLanguage, getInitialLocale } from '../i18n';
 
@@ -62,6 +63,8 @@ router.beforeEach(async (to, _from, next) => {
   const locale = getInitialLocale();
   await loadLocaleMessages(i18n, locale);
   setI18nLanguage(i18n, locale);
+  // Let Vue's reactivity flush the new messages before rendering
+  await nextTick();
 
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
   
