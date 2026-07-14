@@ -133,7 +133,10 @@
     "cancelFailed": "Failed to cancel ticket.",
     "cancelMarkAbsent": "Cancel / Mark Absent",
     "servingBy": "Serving by {barber}",
-    "barberFallback": "Barber"
+    "barberFallback": "Barber",
+    "averageServiceTimeLabel": "Avg. Service Time",
+    "averageServiceTimeUpdated": "Average service time updated successfully.",
+    "invalidTimeError": "Please enter a valid time between 5 and 120 minutes."
   },
   "settings": {
     "shopConfig": "Shop Configuration",

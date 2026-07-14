@@ -67,6 +67,7 @@ interface MockBarber {
   name: string;
   email: string;
   status: 'active' | 'away';
+  average_service_time?: number;
 }
 
 interface MockQueueItem {
@@ -102,9 +103,9 @@ const saveStorage = <T>(key: string, value: T) => {
 
 // Seed default mock data
 const defaultBarbers: MockBarber[] = [
-  { id: 'barber_1', name: 'Marcos Silva', email: 'marcos@barber.com', status: 'active' },
-  { id: 'barber_2', name: 'Thiago Costa', email: 'thiago@barber.com', status: 'active' },
-  { id: 'barber_3', name: 'Felipe Santos', email: 'felipe@barber.com', status: 'away' }
+  { id: 'barber_1', name: 'Marcos Silva', email: 'marcos@barber.com', status: 'active', average_service_time: 20 },
+  { id: 'barber_2', name: 'Thiago Costa', email: 'thiago@barber.com', status: 'active', average_service_time: 25 },
+  { id: 'barber_3', name: 'Felipe Santos', email: 'felipe@barber.com', status: 'away', average_service_time: 20 }
 ];
 
 const defaultQueue: MockQueueItem[] = [
@@ -151,6 +152,22 @@ const syncToStorage = () => {
   saveStorage('config', mockDbState.config);
   triggerSubscribers();
 };
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key && e.key.startsWith(STORAGE_PREFIX)) {
+      const keyWithoutPrefix = e.key.substring(STORAGE_PREFIX.length);
+      if (keyWithoutPrefix === 'barbers') {
+        mockDbState.barbers = loadStorage('barbers', defaultBarbers);
+      } else if (keyWithoutPrefix === 'queue') {
+        mockDbState.queue = loadStorage('queue', defaultQueue);
+      } else if (keyWithoutPrefix === 'config') {
+        mockDbState.config = loadStorage('config', defaultConfig);
+      }
+      triggerSubscribers();
+    }
+  });
+}
 
 // Subscriber system for reactive onSnapshot calls
 type SubscriberCallback = (snapshot: any) => void;

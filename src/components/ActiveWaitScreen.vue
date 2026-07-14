@@ -159,19 +159,7 @@ const { t } = useI18n();
 const loading = ref(true);
 const cancelling = ref(false);
 
-interface Ticket {
-  id: string;
-  customer_name: string;
-  preferred_barbers: string[];
-  status: 'waiting' | 'serving' | 'done' | 'cancelled';
-  created_at: number;
-  assigned_barber?: string;
-}
-
-interface Barber {
-  id: string;
-  name: string;
-}
+import type { Ticket, Barber } from '../types/index';
 
 const ticket = ref<Ticket | null>(null);
 const activeQueue = ref<Ticket[]>([]);
@@ -181,7 +169,7 @@ let unsubscribeTicket: () => void = () => {};
 let unsubscribeQueue: () => void = () => {};
 let unsubscribeBarbers: () => void = () => {};
 
-const WAIT_TIME_PER_CLIENT = 20;
+
 
 onMounted(() => {
   // Subscribe to this specific ticket
@@ -210,7 +198,7 @@ onMounted(() => {
   unsubscribeBarbers = onSnapshot(barbersQuery, (snapshot: any) => {
     const list: Barber[] = [];
     snapshot.docs.forEach((doc: any) => {
-      list.push({ id: doc.id, name: doc.data().name });
+      list.push({ id: doc.id, ...doc.data() } as Barber);
     });
     barbers.value = list;
   });
@@ -257,18 +245,24 @@ const position = computed(() => {
 });
 
 const estimatedWaitTime = computed(() => {
-  // Average calculation: position in queue * standard cut duration, shared across preferences
   const pos = position.value;
   if (pos <= 0) return 0;
   
   const myPrefs = ticket.value?.preferred_barbers || [];
-  let applicableBarbersCount = barbers.value.length || 1;
-  
   if (myPrefs.length > 0) {
-    applicableBarbersCount = myPrefs.length;
-  }
+    const preferredBarbers = barbers.value.filter(b => myPrefs.includes(b.id));
+    const totalAvgTime = preferredBarbers.reduce((sum, b) => sum + (b.average_service_time ?? 20), 0);
+    const avgTime = preferredBarbers.length > 0 ? (totalAvgTime / preferredBarbers.length) : 20;
+    
+    return Math.round((pos * avgTime) / preferredBarbers.length);
+  } else {
+    const active = barbers.value.filter(b => b.status === 'active');
+    const activeCount = active.length || 1;
+    const totalAvgTime = active.reduce((sum, b) => sum + (b.average_service_time ?? 20), 0);
+    const avgTime = active.length > 0 ? (totalAvgTime / active.length) : 20;
 
-  return Math.round((pos * WAIT_TIME_PER_CLIENT) / applicableBarbersCount);
+    return Math.round((pos * avgTime) / activeCount);
+  }
 });
 
 const preferenceSummary = computed(() => {

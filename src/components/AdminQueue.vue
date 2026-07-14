@@ -21,6 +21,25 @@
           {{ currentBarber.status === 'active' ? t('admin.goBreak') : t('admin.goActive') }}
         </button>
       </div>
+      <div class="avg-time-setting">
+        <label for="avgTimeInput" class="time-label">
+          <Clock :size="16" class="color-gold" />
+          {{ t('admin.averageServiceTimeLabel') }}:
+        </label>
+        <div class="time-input-wrapper">
+          <input 
+            id="avgTimeInput"
+            type="number" 
+            v-model.number="averageServiceTime"
+            min="5" 
+            max="120"
+            class="time-input"
+            @change="updateAverageServiceTime"
+            :disabled="updatingTime"
+          />
+          <span class="time-unit">{{ t('common.minutes') }}</span>
+        </div>
+      </div>
     </div>
 
     <div v-if="currentBarber && currentBarber.status === 'away'" class="away-alert glass-panel">
@@ -198,7 +217,8 @@ import {
   Scissors, 
   CheckCircle, 
   RefreshCw, 
-  Users 
+  Users,
+  Clock
 } from '@lucide/vue';
 import { 
   db, 
@@ -224,6 +244,15 @@ const globalQueue = ref<Ticket[]>([]);
 const updatingStatus = ref(false);
 const calling = ref(false);
 const completing = ref(false);
+
+const averageServiceTime = ref(20);
+const updatingTime = ref(false);
+
+watch(currentBarber, (newBarber) => {
+  if (newBarber) {
+    averageServiceTime.value = newBarber.average_service_time || 20;
+  }
+}, { immediate: true });
 
 let unsubscribeBarbers: () => void = () => {};
 let unsubscribeQueue: () => void = () => {};
@@ -309,6 +338,31 @@ const toggleAvailability = async () => {
   }
 };
 
+const updateAverageServiceTime = async () => {
+  if (!currentBarber.value || updatingTime.value) return;
+
+  if (typeof averageServiceTime.value !== 'number' || isNaN(averageServiceTime.value)) {
+    averageServiceTime.value = 20;
+  }
+  
+  if (averageServiceTime.value < 5 || averageServiceTime.value > 120) {
+    alert(t('admin.invalidTimeError'));
+    averageServiceTime.value = currentBarber.value.average_service_time || 20;
+    return;
+  }
+
+  updatingTime.value = true;
+  try {
+    const barberRef = doc(db, 'barbers', currentBarber.value.id);
+    await updateDoc(barberRef, { average_service_time: averageServiceTime.value });
+  } catch (err) {
+    console.error('Error updating average service time:', err);
+    alert(t('admin.statusToggleFailed'));
+  } finally {
+    updatingTime.value = false;
+  }
+};
+
 const callClient = async (ticket: Ticket) => {
   if (!currentBarber.value || calling.value) return;
   if (currentBarber.value.status === 'away') {
@@ -389,6 +443,55 @@ const cancelClient = async (ticket: Ticket) => {
   padding: 20px 30px;
   flex-wrap: wrap;
   gap: 16px;
+}
+
+.avg-time-setting {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--panel-border);
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+}
+
+.time-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.time-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.time-input {
+  width: 65px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--panel-border);
+  color: var(--text-primary);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  outline: none;
+  text-align: center;
+  transition: border-color 0.2s;
+}
+
+.time-input:focus {
+  border-color: var(--accent-gold);
+}
+
+.time-unit {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 500;
 }
 
 .barber-details {

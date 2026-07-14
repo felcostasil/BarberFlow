@@ -5,6 +5,7 @@ export interface Barber {
   name: string;
   email: string;
   status: 'active' | 'away';
+  average_service_time?: number;
 }
 
 export interface Ticket {

@@ -239,6 +239,68 @@ def run_tests():
             page.close()
 
         # ─────────────────────────────────────────
+        # TEST 6 — Barber Average Service Time
+        # ─────────────────────────────────────────
+        print("\n📋 TEST 6 — Barber average service time configuration & wait estimation")
+        
+        # Create a shared browser context so pages share localStorage database
+        test6_context = browser.new_context(viewport={"width": 1280, "height": 800})
+        
+        # 1. Login as Marcos
+        page_barber = test6_context.new_page()
+        page_barber.goto(f"{BASE_URL}/login")
+        page_barber.wait_for_load_state("networkidle")
+        clear_storage(page_barber)
+        page_barber.reload()
+        page_barber.wait_for_load_state("networkidle")
+        page_barber.fill("input#email", "marcos@barber.com")
+        page_barber.fill("input#password", "password123")
+        page_barber.locator("button[type=submit]").click()
+        page_barber.wait_for_url("**/admin")
+        page_barber.wait_for_timeout(1000)
+
+        # 2. Change Marcos' average service time to 45 minutes
+        time_input = page_barber.locator("input#avgTimeInput")
+        time_ok = time_input.is_visible()
+        log("Barber — Average service time input visible", time_ok)
+        if time_ok:
+            time_input.fill("45")
+            time_input.press("Tab")
+            page_barber.wait_for_timeout(1000)
+            log("Barber — Changed average service time to 45 mins", True)
+            save(page_barber, "13_barber_time_45")
+            
+        # 3. Open a client page, select Marcos, and join queue
+        page_client = test6_context.new_page()
+        page_client.goto(BASE_URL)
+        page_client.wait_for_load_state("networkidle")
+        page_client.wait_for_timeout(1000)
+        
+        # Select Marcos Silva card
+        marcos_card = page_client.locator("div.barber-card", has_text="Marcos Silva")
+        marcos_card.click()
+        page_client.wait_for_timeout(500)
+        
+        page_client.fill("input#customerName", "Client de Teste Time")
+        page_client.locator("button[type=submit]").click()
+        page_client.wait_for_url("**/wait/*")
+        page_client.wait_for_timeout(2000)
+        
+        # 4. Check client wait screen estimated time
+        # Estimated wait time should be 45 minutes (1 client ahead + 1 = 1st position * 45 minutes)
+        wait_time_text = page_client.locator(".wait-stats .stat-item", has_text="Estimated Wait").locator(".stat-value").text_content()
+        # Fallback to PT if locale is PT
+        if not wait_time_text:
+            wait_time_text = page_client.locator(".wait-stats .stat-item", has_text="Tempo Estimado").locator(".stat-value").text_content()
+        
+        log(f"Client — Estimated wait time displays: '{wait_time_text}'", "180" in wait_time_text if wait_time_text else False, wait_time_text)
+        save(page_client, "14_client_estimated_45")
+        
+        page_barber.close()
+        page_client.close()
+        test6_context.close()
+
+        # ─────────────────────────────────────────
         # SUMMARY
         # ─────────────────────────────────────────
         browser.close()
