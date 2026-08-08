@@ -120,7 +120,7 @@
     "currentServiceDesc": "Cliente que está atualmente na sua cadeira",
     "emptyServing": "Você não está atendendo ninguém no momento.",
     "inService": "Em Atendimento",
-    "started": "Iniciado há {time}",
+    "started": "Iniciado {time}",
     "finishService": "Finalizar Atendimento (Concluído)",
     "absentConfirm": "Tem certeza que deseja remover {name} da fila?",
     "shopOverviewTitle": "Visão Geral do Estabelecimento",
