@@ -110,7 +110,33 @@ Por padrão, a aplicação detecta se existem variáveis de ambiente configurada
 
 ### Configurando o Firebase em Produção
 
-Crie um arquivo `.env` na raiz do projeto com as chaves do seu projeto Firebase:
+Para desativar o modo de simulação e utilizar o ambiente de produção real com Firebase, siga os passos abaixo:
+
+#### 1. Ativação dos Serviços no Firebase Console
+* **Authentication:** Ative os provedores **E-mail/Senha** (para barbeiros) e **Anônimo** (para clientes).
+* **Firestore Database:** Ative o banco de dados em modo de produção na região de sua preferência (ex: `southamerica-east1` em São Paulo).
+* **Regras de Segurança:** Aplique as regras contidas no arquivo [firestore.rules](file:///Users/felipe/Documents/dev/barberShop/firestore.rules) na aba "Rules" do Firestore.
+
+#### 2. Dados Iniciais Obrigatórios no Firestore
+As regras de segurança exigem a existência prévia das seguintes coleções e documentos para o correto funcionamento do aplicativo em produção:
+* **Configuração da Barbearia (`config/shop`):**
+  * Crie a coleção `config` e adicione um documento com ID personalizado `shop`.
+  * Adicione os campos:
+    * `shop_name` (string)
+    * `radius_meters` (number)
+    * `geo_center` (geopoint): Coordenadas de latitude e longitude do estabelecimento.
+* **Cadastro de Barbeiros (`barbers/{barberId}`):**
+  * Crie a conta de autenticação do barbeiro no painel **Authentication**.
+  * Copie o **User UID** gerado.
+  * No **Firestore**, crie a coleção `barbers` e adicione um documento cujo **ID** seja exatamente o **UID** do barbeiro.
+  * Adicione os campos:
+    * `name` (string)
+    * `email` (string)
+    * `status` (string): `active` ou `away`
+    * `average_service_time` (number): ex. `20`
+
+#### 3. Variáveis de Ambiente
+Crie um arquivo `.env` na raiz do projeto com as chaves do seu projeto Firebase (o app desativa o Modo Demo automaticamente ao detectá-las):
 
 ```env
 VITE_FIREBASE_API_KEY=sua_api_key
@@ -119,13 +145,25 @@ VITE_FIREBASE_PROJECT_ID=seu_project_id
 VITE_FIREBASE_STORAGE_BUCKET=seu_storage_bucket
 VITE_FIREBASE_MESSAGING_SENDER_ID=seu_sender_id
 VITE_FIREBASE_APP_ID=seu_app_id
-VITE_SUPABASE_URL=https://peqwujowabklxftunijd.supabase.co
-VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_Hmj2Z22BovIYrh4yG8minQ_SyieRsFc
 ```
 
 ---
 
-## 💻 Como Rodar o Projeto
+## ☁️ Deploy em Produção (Vercel)
+
+Esta aplicação foi configurada para ser hospedada na **Vercel** de forma integrada com o repositório Git.
+
+1. **Configuração de Rotas SPA:** O arquivo [vercel.json](file:///Users/felipe/Documents/dev/barberShop/vercel.json) já está configurado na raiz para lidar com rewrites de rotas do `vue-router` no modo History. Isso impede erros de página 404 ao recarregar rotas internas (como `/admin` ou `/queue`).
+2. **Variáveis de Ambiente:** No painel da Vercel, nas configurações do projeto, adicione todas as variáveis `VITE_FIREBASE_*` listadas no tópico anterior.
+3. **Comando de Build:**
+   * **Framework Preset:** `Vite`
+   * **Build Command:** `npm run build`
+   * **Output Directory:** `dist`
+4. **HTTPS Exigido:** A Vercel serve o app sob HTTPS por padrão, o que é um pré-requisito obrigatório para o correto funcionamento da geolocalização do Geofencing (`navigator.geolocation`) em navegadores modernos.
+
+---
+
+## 💻 Como Rodar o Projeto Localmente
 
 ### Instalação de Dependências
 ```bash
