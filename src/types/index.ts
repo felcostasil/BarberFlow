@@ -15,6 +15,7 @@ export interface Ticket {
   status: 'waiting' | 'serving' | 'done' | 'cancelled';
   created_at: number;
   assigned_barber?: string;
+  started_at?: number;
 }
 
 // Alias kept for components that used QueueItem name

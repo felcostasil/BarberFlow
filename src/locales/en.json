@@ -59,6 +59,8 @@
     "subtitleWaiting": "You are in the queue",
     "inLine": "in line",
     "estWait": "Estimated Wait",
+    "immediate": "Immediate",
+    "barbersOffline": "Unavailable",
     "preferences": "Preferences",
     "firstAvailable": "First Available",
     "alertWaiting": "Please remain close to the shop. We will update your screen immediately when a barber calls you.",

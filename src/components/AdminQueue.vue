@@ -136,7 +136,7 @@
             <div class="serving-header">
               <span class="badge badge-emerald pulse-ring">{{ t('admin.inService') }}</span>
               <h2>{{ currentServing.customer_name }}</h2>
-              <p class="serving-time">{{ t('admin.started', { time: formatTimeAgo(currentServing.created_at) }) }}</p>
+              <p class="serving-time">{{ t('admin.started', { time: formatTimeAgo(currentServing.started_at || currentServing.created_at) }) }}</p>
             </div>
             
             <div class="serving-actions">
@@ -375,7 +375,8 @@ const callClient = async (ticket: Ticket) => {
     const ticketRef = doc(db, 'queue', ticket.id);
     await updateDoc(ticketRef, {
       status: 'serving',
-      assigned_barber: currentBarber.value.name
+      assigned_barber: currentBarber.value.name,
+      started_at: Date.now()
     });
   } catch (err) {
     console.error('Error calling client:', err);

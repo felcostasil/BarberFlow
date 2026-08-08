@@ -46,7 +46,8 @@
               </div>
               <div class="barber-stats">
                 <span class="wait-badge badge badge-blue">
-                  ~{{ globalWaitTime }} {{ t('common.minutes') }}
+                  <span v-if="globalWaitTime === 0">{{ t('waitScreen.immediate') }}</span>
+                  <span v-else>~{{ globalWaitTime }} {{ t('common.minutes') }}</span>
                 </span>
                 <span class="queue-length">{{ globalQueueCount }} {{ t('checkin.inLine') }}</span>
               </div>
@@ -79,9 +80,10 @@
               </div>
               <div class="barber-stats">
                 <span class="wait-badge badge badge-gold">
-                  ~{{ getBarberWaitTime(barber.id) }} {{ t('common.minutes') }}
+                  <span v-if="getBarberWaitTime(barber.id) === 0">{{ t('waitScreen.immediate') }}</span>
+                  <span v-else>~{{ getBarberWaitTime(barber.id) }} {{ t('common.minutes') }}</span>
                 </span>
-                <span class="queue-length">{{ getBarberQueueCount(barber.id) }} {{ t('checkin.inLine') }}</span>
+                <span class="queue-length">{{ Math.ceil(getBarberQueueCount(barber.id)) }} {{ t('checkin.inLine') }}</span>
               </div>
             </div>
           </label>
@@ -168,18 +170,33 @@ onUnmounted(() => {
   unsubscribeQueue();
 });
 
-// Calculate queue lengths
+// Calculate queue lengths using proportional distribution (expected queue pressure)
 const getBarberQueueCount = (barberId: string): number => {
-  return activeQueue.value.filter(item => 
-    item.status === 'waiting' && 
-    (item.preferred_barbers.includes(barberId) || item.preferred_barbers.length === 0)
-  ).length;
+  const activeBarberIds = activeBarbers.value.map(b => b.id);
+  let expectedQueue = 0;
+
+  for (const item of activeQueue.value) {
+    if (item.status !== 'waiting') continue;
+
+    const prefs = item.preferred_barbers;
+    if (prefs.length === 0) {
+      // First available: distributed equally among all active barbers
+      expectedQueue += 1 / (activeBarberIds.length || 1);
+    } else if (prefs.includes(barberId)) {
+      // Preferred: distributed among the chosen preferred barbers that are active
+      const activePrefsCount = prefs.filter(id => activeBarberIds.includes(id)).length;
+      expectedQueue += 1 / (activePrefsCount || 1);
+    }
+  }
+
+  return Number(expectedQueue.toFixed(1));
 };
 
 const getBarberWaitTime = (barberId: string): number => {
   const barber = activeBarbers.value.find(b => b.id === barberId);
-  const avgTime = barber?.average_service_time ?? 20;
-  return getBarberQueueCount(barberId) * avgTime;
+  if (!barber || barber.status !== 'active') return 0;
+  const avgTime = barber.average_service_time ?? 20;
+  return Math.round(getBarberQueueCount(barberId) * avgTime);
 };
 
 // Global pool stats
@@ -193,7 +210,14 @@ const globalWaitTime = computed(() => {
   const totalAvgTime = active.reduce((sum, b) => sum + (b.average_service_time ?? 20), 0);
   const avgTime = active.length > 0 ? (totalAvgTime / active.length) : 20;
 
-  return Math.round((globalQueueCount.value * avgTime) / activeCount);
+  const rawGlobal = Math.round((globalQueueCount.value * avgTime) / activeCount);
+  
+  // Guarantee that First Available is never slower than any individual active barber's wait time
+  const individualTimes = active.map(b => getBarberWaitTime(b.id));
+  if (individualTimes.length > 0) {
+    return Math.min(rawGlobal, ...individualTimes);
+  }
+  return rawGlobal;
 });
 
 // Selection handlers
