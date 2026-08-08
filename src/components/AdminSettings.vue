@@ -192,6 +192,7 @@ import {
   auth, 
   doc, 
   updateDoc, 
+  setDoc,
   collection, 
   onSnapshot,
   isDemoMode
@@ -296,7 +297,7 @@ const addBarber = async () => {
       
       // In Mock Mode, we also add directly using doc update mock
       const newDocRef = doc(db, 'barbers', newUid);
-      await updateDoc(newDocRef, {
+      await setDoc(newDocRef, {
         name: newBarber.name,
         email: newBarber.email,
         status: 'active'
@@ -330,7 +331,7 @@ const addBarber = async () => {
 
       // Store in firestore collection
       const barberDocRef = doc(db, 'barbers', newUid);
-      await updateDoc(barberDocRef, {
+      await setDoc(barberDocRef, {
         name: newBarber.name,
         email: newBarber.email,
         status: 'active'
