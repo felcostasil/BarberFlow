@@ -33,7 +33,11 @@
         <div class="wait-stats">
           <div class="stat-item">
             <span class="stat-label">{{ t('waitScreen.estWait') }}</span>
-            <span class="stat-value">{{ estimatedWaitTime }} {{ t('common.minutes') }}</span>
+            <span class="stat-value">
+              <span v-if="estimatedWaitTime === 999">{{ t('waitScreen.barbersOffline') }}</span>
+              <span v-else-if="estimatedWaitTime === 0">{{ t('waitScreen.immediate') }}</span>
+              <span v-else>{{ estimatedWaitTime }} {{ t('common.minutes') }}</span>
+            </span>
           </div>
           <div class="stat-divider"></div>
           <div class="stat-item">
@@ -249,19 +253,79 @@ const estimatedWaitTime = computed(() => {
   if (pos <= 0) return 0;
   
   const myPrefs = ticket.value?.preferred_barbers || [];
+  
   if (myPrefs.length > 0) {
-    const preferredBarbers = barbers.value.filter(b => myPrefs.includes(b.id));
-    const totalAvgTime = preferredBarbers.reduce((sum, b) => sum + (b.average_service_time ?? 20), 0);
-    const avgTime = preferredBarbers.length > 0 ? (totalAvgTime / preferredBarbers.length) : 20;
+    // Only count preferred barbers who are active
+    const activePreferred = barbers.value.filter(b => myPrefs.includes(b.id) && b.status === 'active');
     
-    return Math.round((pos * avgTime) / preferredBarbers.length);
+    if (activePreferred.length === 0) {
+      return 999; // Fallback indicating temporary unavailability in calculations
+    }
+    
+    const totalAvgTime = activePreferred.reduce((sum, b) => sum + (b.average_service_time ?? 20), 0);
+    const avgTime = totalAvgTime / activePreferred.length;
+
+    // Detect how many of these preferred active barbers are currently busy serving someone
+    const busyPreferredCount = activePreferred.filter(barber =>
+      activeQueue.value.some(t => t.status === 'serving' && t.assigned_barber === barber.name)
+    ).length;
+    const idlePreferredCount = Math.max(0, activePreferred.length - busyPreferredCount);
+
+    if (pos <= idlePreferredCount) {
+      return 0; // Immediate service available
+    }
+
+    const effectivePos = Math.max(1, pos - idlePreferredCount);
+    return Math.round((effectivePos * avgTime) / activePreferred.length);
   } else {
+    // Global pool / First Available
     const active = barbers.value.filter(b => b.status === 'active');
     const activeCount = active.length || 1;
     const totalAvgTime = active.reduce((sum, b) => sum + (b.average_service_time ?? 20), 0);
     const avgTime = active.length > 0 ? (totalAvgTime / active.length) : 20;
 
-    return Math.round((pos * avgTime) / activeCount);
+    // Detect how many active barbers are busy serving someone
+    const busyBarbersCount = active.filter(barber =>
+      activeQueue.value.some(t => t.status === 'serving' && t.assigned_barber === barber.name)
+    ).length;
+    const idleBarbersCount = Math.max(0, activeCount - busyBarbersCount);
+
+    if (pos <= idleBarbersCount) {
+      return 0; // Immediate service available
+    }
+
+    const effectivePos = Math.max(1, pos - idleBarbersCount);
+    const rawGlobal = Math.round((effectivePos * avgTime) / activeCount);
+
+    // Guarantee that First Available is never slower than any individual active barber's wait time for this client
+    const individualTimes = active.map(barber => {
+      const myTicket = ticket.value;
+      if (!myTicket) return 999;
+      
+      const waitingClients = [...activeQueue.value].sort((a, b) => a.created_at - b.created_at);
+      const myIndex = waitingClients.findIndex(q => q.id === myTicket.id);
+      if (myIndex === -1) return 999;
+      
+      let clientsAhead = 0;
+      for (let i = 0; i < myIndex; i++) {
+        const other = waitingClients[i];
+        const otherPrefs = other.preferred_barbers;
+        const overlaps = otherPrefs.length === 0 || otherPrefs.includes(barber.id);
+        if (overlaps) {
+          clientsAhead++;
+        }
+      }
+      const barberPos = clientsAhead + 1;
+      const bAvgTime = barber.average_service_time ?? 20;
+      
+      const isBusy = activeQueue.value.some(t => t.status === 'serving' && t.assigned_barber === barber.name);
+      const barberIdleCount = isBusy ? 0 : 1;
+      
+      if (barberPos <= barberIdleCount) return 0;
+      return Math.round((barberPos - barberIdleCount) * bAvgTime);
+    });
+
+    return Math.min(rawGlobal, ...individualTimes);
   }
 });
 
