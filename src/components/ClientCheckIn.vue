@@ -249,6 +249,7 @@ const handleSubmit = async () => {
     // Create queue ticket using user.uid as the document ID
     // so the clientId in the URL matches the Firestore document path
     const ticketData = {
+      id: user.uid,
       customer_name: customerName.value.trim(),
       preferred_barbers: isFirstAvailable.value ? [] : [...selectedBarberIds.value],
       status: 'waiting',
