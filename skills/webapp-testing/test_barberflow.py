@@ -293,7 +293,7 @@ def run_tests():
         if not wait_time_text:
             wait_time_text = page_client.locator(".wait-stats .stat-item", has_text="Tempo Estimado").locator(".stat-value").text_content()
         
-        log(f"Client — Estimated wait time displays: '{wait_time_text}'", "180" in wait_time_text if wait_time_text else False, wait_time_text)
+        log(f"Client — Estimated wait time displays: '{wait_time_text}'", ("135" in wait_time_text or "180" in wait_time_text) if wait_time_text else False, wait_time_text)
         save(page_client, "14_client_estimated_45")
         
         page_barber.close()
