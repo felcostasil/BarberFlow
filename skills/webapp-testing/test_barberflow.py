@@ -145,15 +145,14 @@ def run_tests():
         log("Admin loaded — Marcos Silva visible", marcos_name)
         save(page, "07_admin_marcos")
 
+        # Handle confirm dialog (must be registered before triggering the dialog)
+        page.on("dialog", lambda d: d.accept())
         # Logout
         logout_btn = page.locator("button", has_text="Logout").first
         if logout_btn.count() == 0:
             logout_btn = page.locator("button", has_text="Sair").first
         logout_btn.click()
-        page.wait_for_timeout(500)
-        # Handle confirm dialog
-        page.on("dialog", lambda d: d.accept())
-        page.wait_for_timeout(1000)
+        page.wait_for_timeout(1500)
         page.wait_for_load_state("networkidle")
         save(page, "08_after_logout")
 
