@@ -12,7 +12,7 @@
     </div>
 
     <!-- Active geofence checking -->
-    <div class="onboarding-panels" v-if="shopCenter">
+    <div class="onboarding-panels" v-if="shopCenter && !checkingActiveTicket">
       <GeofencingGuard 
         :shop-center="shopCenter" 
         :radius-meters="radiusMeters" 
@@ -23,27 +23,57 @@
         <ClientCheckIn :is-allowed="isAllowed" />
       </div>
     </div>
+
+    <!-- Loading ticket check state -->
+    <div class="shop-welcome-loading" v-else-if="checkingActiveTicket">
+      <RefreshCw class="spin color-gold" :size="32" />
+      <p>{{ t('common.loading') }}</p>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { RefreshCw } from '@lucide/vue';
 import { useI18n } from 'vue-i18n';
 import GeofencingGuard from '../components/GeofencingGuard.vue';
 import ClientCheckIn from '../components/ClientCheckIn.vue';
-import { db, doc, onSnapshot } from '../services/firebase';
+import { db, doc, onSnapshot, auth, onAuthStateChanged, getDoc } from '../services/firebase';
 
 const { t } = useI18n();
+const router = useRouter();
 
 const shopName = ref('');
 const shopCenter = ref<{ latitude: number; longitude: number } | null>(null);
 const radiusMeters = ref(50);
 const isAllowed = ref(false);
+const checkingActiveTicket = ref(true);
 
 let unsubscribe: () => void = () => {};
+let unsubscribeAuth: () => void = () => {};
 
 onMounted(() => {
+  // Subscribe to auth state changes to check for an active queue ticket
+  unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+    if (user && user.isAnonymous) {
+      try {
+        const ticketRef = doc(db, 'queue', user.uid);
+        const ticketSnap = await getDoc(ticketRef);
+        if (ticketSnap.exists()) {
+          const ticketData = ticketSnap.data();
+          if (ticketData && (ticketData.status === 'waiting' || ticketData.status === 'serving')) {
+            router.push({ name: 'ClientWait', params: { clientId: user.uid } });
+            return;
+          }
+        }
+      } catch (err) {
+        console.error('Error checking active ticket:', err);
+      }
+    }
+    checkingActiveTicket.value = false;
+  });
+
   const configRef = doc(db, 'config', 'shop');
   unsubscribe = onSnapshot(configRef, (docSnap: any) => {
     if (docSnap.exists()) {
@@ -63,6 +93,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   unsubscribe();
+  unsubscribeAuth();
 });
 </script>
 
