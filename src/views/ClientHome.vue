@@ -1,34 +1,31 @@
 <template>
   <div class="client-home main-content">
-    <div class="shop-welcome" v-if="shopName">
-      <span class="welcome-tag">{{ t('common.welcome') }}</span>
-      <h1>{{ shopName }}</h1>
-      <p class="tagline">{{ t('common.tagline') }}</p>
-    </div>
-    
-    <div class="shop-welcome-loading" v-else>
+    <!-- Loading state while auth/ticket resolves or shop config loads -->
+    <div class="shop-welcome-loading" v-if="checkingActiveTicket || !shopName || !shopCenter">
       <RefreshCw class="spin color-gold" :size="32" />
       <p>{{ t('common.loading') }}</p>
     </div>
 
-    <!-- Active geofence checking -->
-    <div class="onboarding-panels" v-if="shopCenter && !checkingActiveTicket">
-      <GeofencingGuard 
-        :shop-center="shopCenter" 
-        :radius-meters="radiusMeters" 
-        v-model:is-allowed="isAllowed"
-      />
-      
-      <div class="checkin-container">
-        <ClientCheckIn :is-allowed="isAllowed" />
+    <template v-else>
+      <div class="shop-welcome">
+        <span class="welcome-tag">{{ t('common.welcome') }}</span>
+        <h1>{{ shopName }}</h1>
+        <p class="tagline">{{ t('common.tagline') }}</p>
       </div>
-    </div>
 
-    <!-- Loading ticket check state -->
-    <div class="shop-welcome-loading" v-else-if="checkingActiveTicket">
-      <RefreshCw class="spin color-gold" :size="32" />
-      <p>{{ t('common.loading') }}</p>
-    </div>
+      <!-- Active geofence checking -->
+      <div class="onboarding-panels">
+        <GeofencingGuard 
+          :shop-center="shopCenter" 
+          :radius-meters="radiusMeters" 
+          v-model:is-allowed="isAllowed"
+        />
+        
+        <div class="checkin-container">
+          <ClientCheckIn :is-allowed="isAllowed" />
+        </div>
+      </div>
+    </template>
   </div>
 </template>
 
